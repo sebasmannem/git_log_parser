@@ -1,0 +1,3 @@
+#efm:
+stolon: git@github.com:sorintlab/stolon.gt
+patroni: git@github.com:zalando/patroni.git
