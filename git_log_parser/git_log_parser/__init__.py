@@ -1,4 +1,4 @@
-#!python
+#! /usr/bin/env python
 """
 This program finds authors and reviewers for git logs.
 
@@ -33,13 +33,12 @@ Date:   Thu Dec 12 11:51:30 2019 +0530
 
 """
 
-import argparse
 import datetime
 import re
-import sys
 import psycopg2
 import psycopg2.extras
 
+__version__ = "0.1"
 
 COMMITTERS = {}
 COMMITTERS_PER_COMPANY = {}
@@ -49,7 +48,7 @@ RE_CHANGES = re.compile(r" *(?P<files>[0-9]+) files? changed,?"
                         r"( *(?P<deletes>[0-9]+) deletions?\(\-\))?")
 
 
-def run_sql(cur, query, values=()):
+def __run_sql(cur, query, values=()):
     """Run a query and get the results"""
     # print(query, values)
     cur.execute(query, values)
@@ -59,10 +58,10 @@ def run_sql(cur, query, values=()):
         return None
 
 
-def run_sql_get_one_field(cur, query, values=(), default=None):
+def __run_sql_get_one_field(cur, query, values=(), default=None):
     """Run a query and get first col of first row"""
     try:
-        result = run_sql(cur, query, values)
+        result = __run_sql(cur, query, values)
         return result[0][0]
     except IndexError:
         return default
@@ -86,16 +85,16 @@ class Repository(list):
 
         # No __id yet. Lets see if it is inserted. Find by mail.
         query = "select id from repository where path = %s"
-        self.__id = run_sql_get_one_field(cur, query, (self.path,))
+        self.__id = __run_sql_get_one_field(cur, query, (self.path,))
 
         if self.__id:
             return self.__id
 
-        #raise Exception('Repository unknown in this database. Please add manually.')
+        # raise Exception('Unknown repository. Please add manually.')
         query = 'insert into repository (path) values(%s) RETURNING id'
-        self.__id = run_sql_get_one_field(cur, query, (self.path,))
+        self.__id = __run_sql_get_one_field(cur, query, (self.path,))
         if not self.__id:
-            raise Exception('Coud not add unknown repository %s.', self.path)
+            raise Exception('Coud not add unknown repository.', self.path)
         return self.__id
 
     def __repr__(self):
@@ -156,7 +155,7 @@ class Committer(list):
         # No __id yet. Lets see if it is inserted. Find by mail.
         if self.mail:
             query = "select id from committer where email = %s"
-            self.__id = run_sql_get_one_field(cur, query, (self.mail,))
+            self.__id = __run_sql_get_one_field(cur, query, (self.mail,))
 
         if self.__id:
             return self.__id
@@ -165,20 +164,20 @@ class Committer(list):
         if not self.__id and self.name:
             # First by name
             query = "select id from committer where name = %s"
-            self.__id = run_sql_get_one_field(cur, query, (self.name,))
+            self.__id = __run_sql_get_one_field(cur, query, (self.name,))
 
         if self.__id:
             return self.__id
         # First retrieve and/or create company
         query = "select id from company where name = %s"
-        company_id = run_sql_get_one_field(cur, query, (self.company,))
+        company_id = __run_sql_get_one_field(cur, query, (self.company,))
         if not company_id:
             query = 'insert into company (name) values(%s) RETURNING id'
-            company_id = run_sql_get_one_field(cur, query, (self.company,))
+            company_id = __run_sql_get_one_field(cur, query, (self.company,))
         query = str('insert into committer (name, email, companyid) '
                     'values(%s, %s, %s) RETURNING id')
-        self.__id = run_sql_get_one_field(cur, query, (self.name, self.mail,
-                                                       company_id))
+        self.__id = __run_sql_get_one_field(cur, query, (self.name, self.mail,
+                                                         company_id))
         return self.__id
 
     def __repr__(self):
@@ -248,7 +247,7 @@ class Commit():
             reviewerid = self.reviewer.get_id(cur)
         query = str("select count(*) from commit "
                     "where repoid = %s and hash = %s")
-        exists = run_sql_get_one_field(cur, query, (repoid, self.hash))
+        exists = __run_sql_get_one_field(cur, query, (repoid, self.hash))
         if exists > 0:
             query = str("update commit set authorid = %s, reviewerid = %s, "
                         "dt = %s, files = %s, inserts = %s, "
@@ -256,13 +255,13 @@ class Commit():
             fields = (authorid, reviewerid, self.date)
             fields += self.changes
             fields += (repoid, self.hash)
-            run_sql(cur, query, fields)
+            __run_sql(cur, query, fields)
             return
         query = str("insert into commit "
                     "values (%s, %s, %s, %s, %s, %s, %s, %s)")
         fields = (repoid, self.hash, authorid, reviewerid, self.date)
         fields += self.changes
-        run_sql(cur, query, fields)
+        __run_sql(cur, query, fields)
 
     def __repr__(self):
         """String representation of the object"""
@@ -275,44 +274,3 @@ class Commit():
         ret['changes'] = self.changes
         ret['__body'] = self.__body
         return "Commit({})".format(str(ret))
-
-
-def arguments():
-    """Parse the commandline arguments and return a argparse object."""
-    parser = argparse.ArgumentParser(description='Download content')
-    parser.add_argument('--path', help='The path to parse', required=True)
-    return parser.parse_args()
-
-
-def main():
-    """This is the main program to run"""
-    args = arguments()
-    repo = Repository(args.path)
-    con = psycopg2.connect("")
-    con.autocommit = True
-    # Lets create a cursor to query postgres
-    cur = con.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-    commits = []
-
-    commit_lines = []
-    for line in sys.stdin:
-        line = line.rstrip()
-        if line.startswith("commit ") and commit_lines:
-            commit = Commit(repo, commit_lines)
-            try:
-                commit.write_to_db(cur)
-            except Exception:
-                print(commit)
-                raise
-            commits.append(commit)
-            commit_lines = [line]
-            if len(commits) % 100 == 0:
-                print("Parsed {} commits".format(len(commits)))
-        else:
-            commit_lines.append(line)
-    if len(commits) % 1000 != 0:
-        print("Parsed {} commits".format(len(commits)))
-
-
-main()

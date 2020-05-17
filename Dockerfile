@@ -5,4 +5,6 @@ RUN dnf install -y git glibc-langpack-en && \
     dnf install -y --repo pgdg12 --repo fedora python3-pip postgresql12-server && \
     pip install psycopg2-binary
 COPY scripts/* /app/scripts/
+COPY git_log_parser /app/git_log_parser
+RUN pip3 install /app/git_log_parser/
 ENTRYPOINT /app/scripts/entrypoint.sh
