@@ -36,6 +36,7 @@ setup(
     entry_points={
         'console_scripts': [
             'git_log_commit_parser=git_log.commit_parser:main',
+            'git_log_committer_csv_parser=git_log.committer_csv_parser:main',
         ]
     }
 )

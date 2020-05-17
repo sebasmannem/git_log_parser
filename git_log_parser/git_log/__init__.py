@@ -41,7 +41,7 @@ import psycopg2.extras
 __version__ = "0.1"
 
 COMMITTERS = {}
-COMMITTERS_PER_COMPANY = {}
+COMPANIES = {}
 DTFORMAT = '%a %b %d %H:%M:%S %Y %z'
 RE_CHANGES = re.compile(r" *(?P<files>[0-9]+) files? changed,?"
                         r"( *(?P<inserts>[0-9]+) insertions?\(\+\))?,?"
@@ -101,6 +101,40 @@ class Repository(list):
         return "Repository({})".format({'path': self.path, '__id': self.__id})
 
 
+class Company(list):
+    """This class represents a repository"""
+    name = None
+    __id = None
+
+    def __init__(self, name):
+        super(Company, self).__init__()
+        self.name = name
+
+    def get_id(self, cur):
+        """This method can be used to get the id from the database.
+
+        If needed it will write this object to the database."""
+        if self.__id:
+            return self.__id
+
+        # No __id yet. Lets see if it is inserted. Find by mail.
+        query = "select id from company where name = %s"
+        self.__id = run_sql_get_one_field(cur, query, (self.name,))
+
+        if self.__id:
+            return self.__id
+
+        # raise Exception('Unknown repository. Please add manually.')
+        query = 'insert into company (name) values(%s) RETURNING id'
+        self.__id = run_sql_get_one_field(cur, query, (self.name,))
+        if not self.__id:
+            raise Exception('Coud not add unknown repository.', self.name)
+        return self.__id
+
+    def __repr__(self):
+        return "Company({})".format({'name': self.name, '__id': self.__id})
+
+
 class Committer(list):
     """This class represents a commiter on a repo"""
     name = None
@@ -108,7 +142,7 @@ class Committer(list):
     company = 'Other'
     __id = None
 
-    def __init__(self, name, mail=None, company=None):
+    def __init__(self, name, mail=None, company='Other'):
         if not name:
             raise Exception('Cannot create a committer without a name')
         super(Committer, self).__init__()
@@ -127,28 +161,25 @@ class Committer(list):
         if name not in COMMITTERS:
             COMMITTERS[name] = self
             added = True
-        if added:
+        if added and company:
             self.set_company(company)
 
-    def set_company(self, company):
+    def set_company(self, companyname):
         """This method can be used to set the correct company"""
-        if not company and not self.company:
+        if not companyname and not self.company:
             return
+        if not companyname:
+            return
+        try:
+            company = COMPANIES[companyname]
+        except KeyError:
+            company = COMPANIES[companyname] = Company(companyname)
         if self.company == company:
             return
-        if self.company:
-            try:
-                COMMITTERS_PER_COMPANY[self.company].remove(self)
-            except KeyError:
-                pass
-        if company:
-            try:
-                COMMITTERS_PER_COMPANY[self.company].append(self)
-            except KeyError:
-                COMMITTERS_PER_COMPANY[self.company] = [self]
+        self.company = company
 
     def get_id(self, cur):
-        """This method can be used to write this obejt to the database"""
+        """This method can also be used to write this object to the database"""
         if self.__id:
             return self.__id
 
@@ -169,8 +200,7 @@ class Committer(list):
         if self.__id:
             return self.__id
         # First retrieve and/or create company
-        query = "select id from company where name = %s"
-        company_id = run_sql_get_one_field(cur, query, (self.company,))
+        company_id = self.company.get_id(cur)
         if not company_id:
             query = 'insert into company (name) values(%s) RETURNING id'
             company_id = run_sql_get_one_field(cur, query, (self.company,))

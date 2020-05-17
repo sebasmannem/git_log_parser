@@ -76,6 +76,3 @@ def main():
             commit_lines.append(line)
     if len(commits) % 1000 != 0:
         print("Parsed {} commits".format(len(commits)))
-
-
-main()
