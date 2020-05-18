@@ -196,3 +196,10 @@ inner join committer on commit.authorid =committer.id
 inner join company on committer.companyid = company.id
 group by repository.path, company.name
 order by total_inserts desc, total_deletes desc, total_files desc;
+
+create view vw_repo_velocity as
+select extract(year from dt) as year, repository.path, sum(inserts) total_inserts, sum(deletes) total_deletes, sum(files) total_files
+from commit
+inner join repository on commit.repoid = repository.id
+group by repository.path, extract(year from dt)
+order by extract(year from dt) desc, repository.path;
