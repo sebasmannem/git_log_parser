@@ -4,3 +4,4 @@ mkdir -p /pgdata
 chown postgres: /pgdata
 su - postgres -c /app/scripts/stage_postgres.sh
 su - postgres -c /app/scripts/process_git.sh
+su - postgres -c /app/scripts/export.sh

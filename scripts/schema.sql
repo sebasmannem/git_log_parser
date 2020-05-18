@@ -178,3 +178,21 @@ ALTER TABLE ONLY public.commit
 ALTER TABLE ONLY public.committer
     ADD CONSTRAINT fk_committer_company FOREIGN KEY (companyid) REFERENCES public.company(id);
 
+
+create view vw_committers as
+select company.name companyname, committer.name, email, sum(inserts) total_inserts,sum(deletes) total_deletes, sum(files) total_files
+from company inner join committer on
+company.id = committer.companyid
+inner join commit on
+commit.authorid = committer.id
+group by company.name, committer.name, email
+order by total_inserts desc, total_deletes desc, total_files desc;
+
+create view vw_company_commits as
+select repository.path, company.name, sum(inserts) total_inserts, sum(deletes) total_deletes, sum(files) total_files
+from commit
+inner join repository on commit.repoid = repository.id
+inner join committer on commit.authorid =committer.id
+inner join company on committer.companyid = company.id
+group by repository.path, company.name
+order by total_inserts desc, total_deletes desc, total_files desc;
