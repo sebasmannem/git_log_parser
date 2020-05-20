@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VIEWS=(vw_committers vw_company_commits vw_repo_velocity)
+VIEWS=(vw_committers vw_company_commits vw_repo_velocity vw_committer_velocity)
 for vw in "${VIEWS[@]}"; do
   CSVFILE="/app/csv/${vw}.csv"
   echo "Exporting to ${CSVFILE}"

@@ -180,7 +180,7 @@ ALTER TABLE ONLY public.committer
 
 
 create view vw_committers as
-select company.name companyname, committer.name, email, sum(inserts) total_inserts,sum(deletes) total_deletes, sum(files) total_files
+select company.name companyname, committer.name, email, sum(inserts) total_inserts,sum(deletes) total_deletes, sum(files) total_files, count(authorid) commits
 from company inner join committer on
 company.id = committer.companyid
 inner join commit on
@@ -189,7 +189,7 @@ group by company.name, committer.name, email
 order by total_inserts desc, total_deletes desc, total_files desc;
 
 create view vw_company_commits as
-select repository.path, company.name, sum(inserts) total_inserts, sum(deletes) total_deletes, sum(files) total_files
+select repository.path, company.name, count(distinct commit.authorid) committers, sum(inserts) total_inserts, sum(deletes) total_deletes, sum(files) total_files, count(authorid) commits
 from commit
 inner join repository on commit.repoid = repository.id
 inner join committer on commit.authorid =committer.id
@@ -198,8 +198,18 @@ group by repository.path, company.name
 order by total_inserts desc, total_deletes desc, total_files desc;
 
 create view vw_repo_velocity as
-select extract(year from dt) as year, repository.path, sum(inserts) total_inserts, sum(deletes) total_deletes, sum(files) total_files
+select extract(year from dt) as year, repository.path, sum(inserts) total_inserts, sum(deletes) total_deletes, sum(files) total_files, count(authorid) commits
 from commit
 inner join repository on commit.repoid = repository.id
 group by repository.path, extract(year from dt)
 order by extract(year from dt) desc, repository.path;
+
+create view vw_committer_velocity as
+select extract(year from dt) as year, repository.path repo, committer.name, email, sum(inserts) total_inserts,sum(deletes) total_deletes, sum(files) total_files, count(authorid) commits
+from company inner join committer on
+company.id = committer.companyid
+inner join commit
+on commit.authorid = committer.id
+inner join repository on commit.repoid = repository.id
+group by extract(year from dt), repository.path, committer.name, email
+order by extract(year from dt) desc, total_inserts desc, total_deletes desc, total_files desc;
